@@ -84,6 +84,43 @@ class KeyChannelTest(unittest.TestCase):
         exec(RUN_HANDLER, env)
         self.assertEqual(midi.sent, [("NoteOn", 36, 9)])
 
+    def test_chord_mode_sends_polyphonic_notes(self):
+        midi = Midi()
+        settings = [{"note": 61, "velocity": 120, "channel": 0, "chord_root": 4, "chord_shape": 0} for _ in range(6)]
+        env = {
+            "chord_mode": True,
+            "guitar_chord": lambda r, s: (40, 47, 52),
+            "chord_name": lambda r, s: "E",
+            "active_notes": {},
+            "chordtype_labels": [SimpleNamespace(color=0) for _ in range(6)],
+            "event": SimpleNamespace(key_number=0, pressed=True, released=False),
+            "control_settings": {"keys": settings},
+            "POT_C_INSTRUMENTS": False,
+            "current_instrument": -1,
+            "INSTRUMENTS": [],
+            "DRUM_NOTES": [36, 38, 42, 46, 49, 51],
+            "DRUM_CHANNEL": 9,
+            "MIDI_NOTE_NAMES": [str(i) for i in range(128)],
+            "held_keys": [None] * 6,
+            "key_panels": [SimpleNamespace(fill=None) for _ in range(6)],
+            "keynote_labels": [SimpleNamespace(color=0) for _ in range(6)],
+            "key_rings": [SimpleNamespace(hidden=True) for _ in range(6)],
+            "key_ring_until": [0] * 6,
+            "time": time,
+            "midi": midi,
+            "NoteOn": type("NoteOn", (Message,), {}),
+            "NoteOff": type("NoteOff", (Message,), {}),
+        }
+        exec(RUN_HANDLER, env)
+        self.assertEqual(midi.sent, [("NoteOn", 40, 0), ("NoteOn", 47, 0), ("NoteOn", 52, 0)])
+        env["event"] = SimpleNamespace(key_number=0, pressed=False, released=True)
+        exec(RUN_HANDLER, env)
+        self.assertEqual(midi.sent, [
+            ("NoteOn", 40, 0), ("NoteOn", 47, 0), ("NoteOn", 52, 0),
+            ("NoteOff", 40, 0), ("NoteOff", 47, 0), ("NoteOff", 52, 0)
+        ])
+        self.assertIsNone(env["held_keys"][0])
+
 
 if __name__ == "__main__":
     unittest.main()
