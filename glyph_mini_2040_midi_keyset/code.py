@@ -79,6 +79,78 @@ DRUM_CHANNEL = 9           # MIDI channel 10 (0-based 9) is the GM drum channel
 DRUM_NOTES = [36, 38, 42, 46, 49, 51]  # keys 1-6: kick, snare, closed/open hat, crash, ride
 current_instrument = -1
 
+# Guitar tuning, low E through high E. None means a muted string. The movable
+# shapes are rooted on the low E string; shifting every fret preserves the
+# exact guitar voicing, including doubled notes, in every key.
+GUITAR_OPEN_STRINGS = (40, 45, 50, 55, 59, 64)
+CHORD_ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+CHORD_SHAPES = (
+    ("maj", (0, 2, 2, 1, 0, 0)),
+    ("m", (0, 2, 2, 0, 0, 0)),
+    ("5", (0, 2, 2, None, None, None)),
+    ("sus2", (0, 2, 4, 4, None, 0)),
+    ("sus4", (0, 2, 2, 2, 0, 0)),
+    ("aug", (0, 3, 2, 1, 1, 0)),
+    ("dim", (0, 1, 2, 0, None, None)),
+    ("6", (0, 2, 2, 1, 2, 0)),
+    ("m6", (0, 2, 2, 0, 2, 0)),
+    ("7", (0, 2, 0, 1, 0, 0)),
+    ("maj7", (0, 2, 1, 1, 0, 0)),
+    ("m7", (0, 2, 0, 0, 0, 0)),
+    ("mMaj7", (0, 2, 1, 0, 0, 0)),
+    ("dim7", (0, 1, 2, 0, 2, None)),
+    ("m7b5", (0, 1, 0, 0, None, None)),
+    ("7sus4", (0, 2, 0, 2, 0, 0)),
+    ("add9", (0, 2, 4, 1, 0, 0)),
+    ("madd9", (0, 2, 4, 0, 0, 0)),
+    ("9", (0, 2, 0, 1, 0, 2)),
+    ("maj9", (0, 2, 1, 1, 0, 2)),
+    ("m9", (0, 2, 0, 0, 0, 2)),
+    ("13", (0, 2, 0, 1, 2, 2)),
+    ("7b9", (0, 2, 0, 1, 0, 1)),
+    ("7#9", (0, 2, 0, 1, 0, 3)),
+    ("7b5", (0, 1, 0, 1, None, 0)),
+    ("7#5", (0, 3, 0, 1, 1, 0)),
+    ("6/9", (0, 2, 4, 1, 2, 2)),
+)
+# Familiar lower-fret fingerings; other combinations use movable shapes.
+OPEN_CHORDS = {
+    (0, "maj"): (None, 3, 2, 0, 1, 0),
+    (1, "maj"): (None, 4, 3, 1, 2, 1),
+    (2, "maj"): (None, None, 0, 2, 3, 2),
+    (3, "maj"): (None, None, 1, 3, 4, 3),
+    (4, "maj"): (0, 2, 2, 1, 0, 0),
+    (5, "maj"): (1, 3, 3, 2, 1, 1),
+    (7, "maj"): (3, 2, 0, 0, 0, 3),
+    (9, "maj"): (None, 0, 2, 2, 2, 0),
+    (11, "maj"): (None, 2, 4, 4, 4, 2),
+    (0, "m"): (None, 3, 5, 5, 4, 3),
+    (1, "m"): (None, 4, 6, 6, 5, 4),
+    (2, "m"): (None, None, 0, 2, 3, 1),
+    (4, "m"): (0, 2, 2, 0, 0, 0),
+    (5, "m"): (1, 3, 3, 1, 1, 1),
+    (7, "m"): (3, 5, 5, 3, 3, 3),
+    (9, "m"): (None, 0, 2, 2, 1, 0),
+    (0, "7"): (None, 3, 2, 3, 1, 0),
+    (2, "7"): (None, None, 0, 2, 1, 2),
+    (4, "7"): (0, 2, 0, 1, 0, 0),
+    (7, "7"): (3, 2, 0, 0, 0, 1),
+    (9, "7"): (None, 0, 2, 0, 2, 0),
+    (1, "maj7"): (None, 4, 3, 1, 1, 1),
+}
+
+def guitar_chord(root, shape):
+    """Return MIDI pitches in low-to-high string order for a guitar chord."""
+    name, frets = CHORD_SHAPES[shape]
+    frets = OPEN_CHORDS.get((root, name), frets)
+    shift = 0 if (root, name) in OPEN_CHORDS else (root - 4) % 12
+    return tuple(open_note + fret + shift for open_note, fret in zip(GUITAR_OPEN_STRINGS, frets)
+                 if fret is not None)
+
+def chord_name(root, shape):
+    suffix = CHORD_SHAPES[shape][0]
+    return CHORD_ROOTS[root] + ("" if suffix == "maj" else suffix)
+
 # Set these two values to match the OLED fitted to your board.
 # Common I2C addresses are 0x3C and 0x3D; see README if the screen is blank.
 OLED_DRIVER = "SSD1306"  # "SH1106" or "SSD1306"
@@ -95,12 +167,12 @@ control_settings = {
         {'cc_num': 11, 'range_min': 0, 'range_max': 127, 'channel': 0, 'current_val': 0}, # Pot C: expression
     ],
     'keys': [
-        {'note': 61, 'velocity': 120, 'channel': 0},  # Key 1
-        {'note': 64, 'velocity': 120, 'channel': 0},  # Key 2
-        {'note': 66, 'velocity': 120, 'channel': 0},  # Key 3
-        {'note': 68, 'velocity': 120, 'channel': 0},  # Key 4
-        {'note': 73, 'velocity': 120, 'channel': 0},  # Key 5
-        {'note': 75, 'velocity': 120, 'channel': 0},  # Key 6
+        {'note': 61, 'velocity': 120, 'channel': 0, 'chord_root': 1, 'chord_shape': 1},  # C#m
+        {'note': 64, 'velocity': 120, 'channel': 0, 'chord_root': 11, 'chord_shape': 0}, # B
+        {'note': 66, 'velocity': 120, 'channel': 0, 'chord_root': 9, 'chord_shape': 0},  # A
+        {'note': 68, 'velocity': 120, 'channel': 0, 'chord_root': 11, 'chord_shape': 0}, # B
+        {'note': 73, 'velocity': 120, 'channel': 0, 'chord_root': 1, 'chord_shape': 1},  # C#m
+        {'note': 75, 'velocity': 120, 'channel': 0, 'chord_root': 11, 'chord_shape': 0}, # B
     ]
 }
 
@@ -121,7 +193,9 @@ keys = keypad.Keys(
     value_when_pressed=False,  # Buttons pull to ground when pressed
     pull=True  # Enable internal pull-up resistors
 )
-held_keys = [None] * 6  # (note, channel) used to release the exact note that started
+held_keys = [None] * 6  # (pitches, channel) preserves the sound started by each press
+active_notes = {}  # (channel, pitch) -> held key count, for overlapping chords
+chord_mode = True  # Custom chord preset starts ready to play; long press switches modes
 
 # Set up encoder button with debouncer
 encoder_button_pin = DigitalInOut(board.GP10)
@@ -229,13 +303,24 @@ keynotes = [
     for i in range(6)
 ]
 keynote_labels = []
-for keynote in keynotes:
-    note = label.Label(terminalio.FONT, text=MIDI_NOTE_NAMES[keynote['num']],
+chordtype_labels = []
+for key_index, keynote in enumerate(keynotes):
+    key_settings = control_settings['keys'][key_index]
+    note = label.Label(terminalio.FONT,
+                       text=CHORD_ROOTS[key_settings['chord_root']] if chord_mode
+                       else MIDI_NOTE_NAMES[keynote['num']],
                        color=0xFFFFFF)
     note.anchor_point = (0.5, 0)
-    note.anchored_position = keynote['pos']
+    note.anchored_position = (keynote['pos'][0], 41) if chord_mode else keynote['pos']
     keynote_labels.append(note)
     keynote_maingroup.append(note)
+    chord_type = label.Label(terminalio.FONT,
+                             text=CHORD_SHAPES[key_settings['chord_shape']][0][:3]
+                             if chord_mode else "", color=0xFFFFFF)
+    chord_type.anchor_point = (0.5, 0)
+    chord_type.anchored_position = (keynote['pos'][0], 52)
+    chordtype_labels.append(chord_type)
+    keynote_maingroup.append(chord_type)
 maingroup.append(keynote_maingroup)
 
 potval_maingroup = displayio.Group()
@@ -269,6 +354,7 @@ header_area.anchored_position = (64, 2)
 item1_area = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=4, y=25,)
 item2_area = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=4, y=38,)
 item3_area = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=4, y=52,)
+item4_area = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=4, y=58,)
 
 # Create separate labels for range min and max
 range_label = label.Label(terminalio.FONT, text="Range:", color=0xFFFFFF, x=4, y=38,)
@@ -285,6 +371,7 @@ editgroup.append(header_area)
 editgroup.append(item1_area)
 editgroup.append(item2_area)
 editgroup.append(item3_area)
+editgroup.append(item4_area)
 editgroup.append(range_rectangle)
 range_rectangle.hidden = True
 
@@ -314,6 +401,7 @@ def snap(v, pot):
 
 # Function to update edit mode display
 def update_edit_display(index):
+    global item_areas
     # First, remove the range components if they exist in editgroup
     if range_label in editgroup:
         editgroup.remove(range_label)
@@ -321,6 +409,9 @@ def update_edit_display(index):
         editgroup.remove(range_dash_label)
         editgroup.remove(range_max_label)
     if index < 3:  # Potentiometer
+        item_areas = [item1_area, item2_area, item3_area]
+        item1_area.y, item2_area.y, item3_area.y = 25, 38, 52
+        item4_area.text = ""
         p = control_settings['pots'][index]
         header_area.text = f"EDIT POT {'ABC'[index]}"
         item1_area.text = f"CC Number:     {p['cc_num']}"
@@ -334,7 +425,20 @@ def update_edit_display(index):
         range_min_label.text = str(p['range_min'])
         range_max_label.text = str(p['range_max'])
         item3_area.text = f"MIDI Channel:  {p['channel'] + 1}"
-    else:  # Button
+    elif chord_mode:  # Guitar chord button
+        item_areas = [item1_area, item2_area, item3_area, item4_area]
+        item1_area.y, item2_area.y, item3_area.y, item4_area.y = 21, 33, 45, 57
+        k = index - 3
+        s = control_settings['keys'][k]
+        header_area.text = f"CHORD KEY {k + 1}"
+        item1_area.text = f"Root: {CHORD_ROOTS[s['chord_root']]}"
+        item2_area.text = f"Shape: {CHORD_SHAPES[s['chord_shape']][0]}"
+        item3_area.text = f"Velocity: {s['velocity']}"
+        item4_area.text = f"Channel: {s['channel'] + 1}"
+    else:  # Single note button
+        item_areas = [item1_area, item2_area, item3_area]
+        item1_area.y, item2_area.y, item3_area.y = 25, 38, 52
+        item4_area.text = ""
         k = index - 3
         s = control_settings['keys'][k]
         note_name = MIDI_NOTE_NAMES[s['note']]
@@ -358,8 +462,23 @@ while True:
     # Update encoder button state
     encoder_button.update()
 
+    # A long press on the home page switches between notes and guitar chords.
+    if not edit_mode and encoder_button.long_press:
+        chord_mode = not chord_mode
+        for key_index, key_label in enumerate(keynote_labels):
+            settings = control_settings['keys'][key_index]
+            if chord_mode:
+                key_label.text = CHORD_ROOTS[settings['chord_root']]
+                key_label.anchored_position = (12 + key_index * 21, 41)
+                chordtype_labels[key_index].text = CHORD_SHAPES[settings['chord_shape']][0][:3]
+            else:
+                key_label.text = MIDI_NOTE_NAMES[settings['note']]
+                key_label.anchored_position = (12 + key_index * 21, 45)
+                chordtype_labels[key_index].text = ""
+        print("Mode:", "guitar chords" if chord_mode else "single notes")
+
     # Handle encoder button presses
-    if encoder_button.short_count == 1:
+    if encoder_button.short_count == 1 and not encoder_button.long_press:
         if not edit_mode:
             # Short press enters edit mode
             update_edit_display(current_index)
@@ -395,6 +514,8 @@ while True:
         # send midi panic
         for channel in range(16):
             midi.send(ControlChange(123, 0), channel=channel)
+        active_notes.clear()
+        held_keys = [None] * 6
 
     # Handle long press in edit mode
     if edit_mode and encoder_button.long_press:
@@ -455,29 +576,47 @@ while True:
         # event.key_number gives you the index (0-5) of which button
         key_index = event.key_number
 
-        drums = (POT_C_INSTRUMENTS and current_instrument >= 0
+        drums = (not chord_mode and POT_C_INSTRUMENTS and current_instrument >= 0
                  and INSTRUMENTS[current_instrument][1] is None)
         key_settings = control_settings['keys'][key_index]
         key_note = DRUM_NOTES[key_index] if drums else key_settings['note']
         key_channel = DRUM_CHANNEL if drums else key_settings['channel']
 
         if event.pressed:
-            # Button was pressed - send NoteOn using settings
-            held_keys[key_index] = (key_note, key_channel)
-            midi.send(NoteOn(key_note, key_settings['velocity']), channel=key_channel)
+            pitches = (guitar_chord(key_settings['chord_root'], key_settings['chord_shape'])
+                       if chord_mode else (key_note,))
+            held_keys[key_index] = (pitches, key_channel)
+            for pitch in pitches:
+                note_id = (key_channel, pitch)
+                if not active_notes.get(note_id, 0):
+                    midi.send(NoteOn(pitch, key_settings['velocity']), channel=key_channel)
+                active_notes[note_id] = active_notes.get(note_id, 0) + 1
             key_panels[key_index].fill = 0xFFFFFF
             keynote_labels[key_index].color = 0x000000
+            chordtype_labels[key_index].color = 0x000000
             key_rings[key_index].hidden = False
             key_ring_until[key_index] = time.monotonic() + 0.12
-            print("Key", key_index + 1, "pressed -> note", MIDI_NOTE_NAMES[key_note])
+            print("Key", key_index + 1, "pressed ->",
+                  chord_name(key_settings['chord_root'], key_settings['chord_shape'])
+                  if chord_mode else MIDI_NOTE_NAMES[key_note])
 
         if event.released:
-            # Button was released - send NoteOff using settings
-            off_note, off_channel = held_keys[key_index] or (key_note, key_channel)
-            midi.send(NoteOff(off_note, key_settings['velocity']), channel=off_channel)
+            # Release exactly the pitches and channel used at press time, even
+            # if the mode or assignment changed while the key was held.
+            if held_keys[key_index] is not None:
+                pitches, off_channel = held_keys[key_index]
+                for pitch in pitches:
+                    note_id = (off_channel, pitch)
+                    count = active_notes.get(note_id, 0)
+                    if count <= 1:
+                        active_notes.pop(note_id, None)
+                        midi.send(NoteOff(pitch, key_settings['velocity']), channel=off_channel)
+                    else:
+                        active_notes[note_id] = count - 1
             held_keys[key_index] = None
             key_panels[key_index].fill = None
             keynote_labels[key_index].color = 0xFFFFFF
+            chordtype_labels[key_index].color = 0xFFFFFF
 
     now = time.monotonic()
     for key_index, until in enumerate(key_ring_until):
@@ -556,7 +695,24 @@ while True:
                     pot_settings['channel'] = (pot_settings['channel'] + direction) % 16
                     item3_area.text = f"MIDI Channel:  {pot_settings['channel'] + 1}"
 
-            else:  # Editing key
+            elif chord_mode:  # Editing guitar chord key
+                key_index = current_index - 3
+                key_settings = control_settings['keys'][key_index]
+                if edit_current_index == 0:
+                    key_settings['chord_root'] = (key_settings['chord_root'] + direction) % 12
+                    item1_area.text = f"Root: {CHORD_ROOTS[key_settings['chord_root']]}"
+                elif edit_current_index == 1:
+                    key_settings['chord_shape'] = (key_settings['chord_shape'] + direction) % len(CHORD_SHAPES)
+                    item2_area.text = f"Shape: {CHORD_SHAPES[key_settings['chord_shape']][0]}"
+                elif edit_current_index == 2:
+                    key_settings['velocity'] = max(1, min(127, key_settings['velocity'] + direction))
+                    item3_area.text = f"Velocity: {key_settings['velocity']}"
+                else:
+                    key_settings['channel'] = (key_settings['channel'] + direction) % 16
+                    item4_area.text = f"Channel: {key_settings['channel'] + 1}"
+                keynote_labels[key_index].text = CHORD_ROOTS[key_settings['chord_root']]
+                chordtype_labels[key_index].text = CHORD_SHAPES[key_settings['chord_shape']][0][:3]
+            else:  # Editing single-note key
                 key_index = current_index - 3
                 key_settings = control_settings['keys'][key_index]
 
@@ -567,7 +723,7 @@ while True:
                     # Update the main screen label too
                     keynote_labels[key_index].text = key_note_name
                 elif edit_current_index == 1:  # Velocity
-                    key_settings['velocity'] = (key_settings['velocity'] + direction) % 127
+                    key_settings['velocity'] = max(1, min(127, key_settings['velocity'] + direction))
                     item2_area.text = f"Velocity:      {key_settings['velocity']}"
                 elif edit_current_index == 2:  # MIDI Channel
                     key_settings['channel'] = (key_settings['channel'] + direction) % 16
