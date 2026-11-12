@@ -77,7 +77,7 @@ INSTRUMENTS = [            # (name shown on OLED, GM program number or None for 
 ]
 DRUM_CHANNEL = 9           # MIDI channel 10 (0-based 9) is the GM drum channel
 DRUM_NOTES = [36, 38, 42, 46, 49, 51]  # keys 1-6: kick, snare, closed/open hat, crash, ride
-current_instrument = -1
+current_instrument = 0
 
 # Guitar tuning, low E through high E. None means a muted string. The movable
 # shapes are rooted on the low E string; shifting every fret preserves the
@@ -176,8 +176,6 @@ control_settings = {
     ]
 }
 
-#  midi note numbers (will be replaced by control_settings)
-midi_notes = [key['note'] for key in control_settings['keys']]
 
 
 #rotary encoder and button
@@ -290,11 +288,14 @@ for title, center in (("MOD", 21), ("BEND", 63), ("EXPR", 106)):
     maingroup.append(heading)
 
 current_index = 0
-rect_info = rect_dict[current_index]
-x, y = rect_info['pos']
-w, h = rect_info['dim']
-rectangle = RoundRect(x, y, w, h, 6, fill=None, outline=0xFFFFFF)
-maingroup.append(rectangle)
+selector_rects = []
+for i, box in enumerate(rect_dict):
+    bx, by = box['pos']
+    bw, bh = box['dim']
+    sr = RoundRect(bx, by, bw, bh, 6, fill=None, outline=0xFFFFFF)
+    sr.hidden = (i != current_index)
+    maingroup.append(sr)
+    selector_rects.append(sr)
 
 keynote_maingroup = displayio.Group()
 keynotes = [
@@ -462,54 +463,7 @@ while True:
     # Update encoder button state
     encoder_button.update()
 
-    # A long press on the home page switches between notes and guitar chords.
-    if not edit_mode and encoder_button.long_press:
-        chord_mode = not chord_mode
-        for key_index, key_label in enumerate(keynote_labels):
-            settings = control_settings['keys'][key_index]
-            if chord_mode:
-                key_label.text = CHORD_ROOTS[settings['chord_root']]
-                key_label.anchored_position = (12 + key_index * 21, 41)
-                chordtype_labels[key_index].text = CHORD_SHAPES[settings['chord_shape']][0][:3]
-            else:
-                key_label.text = MIDI_NOTE_NAMES[settings['note']]
-                key_label.anchored_position = (12 + key_index * 21, 45)
-                chordtype_labels[key_index].text = ""
-        print("Mode:", "guitar chords" if chord_mode else "single notes")
-
     # Handle encoder button presses
-    if encoder_button.short_count == 1 and not encoder_button.long_press:
-        if not edit_mode:
-            # Short press enters edit mode
-            update_edit_display(current_index)
-            edit_current_index = 0
-            edit_rectangle.x = 0
-            edit_rectangle.y = item_areas[edit_current_index].y - 7
-            edit_active = False
-            range_rectangle.hidden = True
-            display.root_group = editgroup
-            edit_mode = True
-        elif edit_mode and edit_active and current_index < 3 and edit_current_index == 1:
-            # In range editing mode, short press switches between min/max
-            range_edit_selection = 1 - range_edit_selection  # Toggle between 0 and 1
-            if range_edit_selection == 0:
-                range_rectangle.x = range_min_label.x - 2
-            else:
-                range_rectangle.x = range_max_label.x - 2
-        else:
-            # Short press exits edit mode
-            display.root_group = maingroup
-            edit_mode = False
-            edit_active = False
-            range_edit_active = False
-            edit_rectangle.fill = None
-            item_areas[edit_current_index].color = 0xFFFFFF
-            if current_index < 3 and edit_current_index == 1:
-                range_min_label.color = 0xFFFFFF
-                range_max_label.color = 0xFFFFFF
-                range_label.color = 0xFFFFFF
-                range_dash_label.color = 0xFFFFFF
-                range_rectangle.hidden = True
     if encoder_button.short_count == 2:
         # send midi panic
         for channel in range(16):
@@ -517,58 +471,82 @@ while True:
         active_notes.clear()
         held_keys = [None] * 6
 
-    # Handle long press in edit mode
-    if edit_mode and encoder_button.long_press:
-        if current_index < 3 and edit_current_index == 1:
-            # We're on the Range line
+    elif encoder_button.short_count == 1 and not encoder_button.long_press:
+        if not edit_mode:
+            # Short press enters edit mode
+            update_edit_display(current_index)
+            edit_current_index = 0
+            edit_rectangle.x = 0
+            edit_rectangle.y = item_areas[edit_current_index].y - 7
+            edit_rectangle.fill = None
+            edit_active = False
+            range_rectangle.hidden = True
+            display.root_group = editgroup
+            edit_mode = True
+        elif current_index < 3 and edit_current_index == 1:
+            # Range editing on Potentiometers
             if not edit_active:
-                # Not in range edit mode yet, enter it
                 edit_active = True
-                range_edit_active = False
-                edit_rectangle.fill = 0xFFFFFF
-                # Show the range rectangle
+                range_edit_selection = 0
                 range_rectangle.hidden = False
-                range_rectangle.fill = None
-                range_rectangle.outline = 0x000000
-                range_edit_selection = 0  # Start with min
-                # Position range rectangle over the min value
                 range_rectangle.x = range_min_label.x - 2
                 range_rectangle.y = range_min_label.y - 7
-                range_label.color = 0x000000
-                range_dash_label.color = 0x000000
-                range_max_label.color = 0x000000
+                range_rectangle.fill = 0xFFFFFF
                 range_min_label.color = 0x000000
-            elif edit_active and not range_edit_active:
-                # In selection mode, enter value editing mode
-                range_edit_active = True
-                range_rectangle.fill = 0x000000
-                range_min_label.color = 0xFFFFFF
                 range_max_label.color = 0xFFFFFF
-            elif edit_active and range_edit_active:
-                # In value editing mode, exit range editing completely
+            elif range_edit_selection == 0:
+                # Switch to editing Max
+                range_edit_selection = 1
+                range_rectangle.x = range_max_label.x - 2
+                range_rectangle.y = range_max_label.y - 7
+                range_min_label.color = 0xFFFFFF
+                range_max_label.color = 0x000000
+            else:
+                # Confirm range and return to line navigation
                 edit_active = False
-                range_edit_active = False
-                edit_rectangle.fill = None
-                # Hide range rectangle and restore colors
                 range_rectangle.hidden = True
-                range_label.color = 0xFFFFFF
-                range_dash_label.color = 0xFFFFFF
                 range_min_label.color = 0xFFFFFF
                 range_max_label.color = 0xFFFFFF
         else:
-            # Non-range items - simple toggle
+            # Standard parameters: toggle editing state
             edit_active = not edit_active
-            range_edit_active = False  # Reset range edit active state
-
-            # Change rectangle color to indicate active editing
             if edit_active:
                 edit_rectangle.fill = 0xFFFFFF
-                # Make text black on white background for other items
                 item_areas[edit_current_index].color = 0x000000
             else:
                 edit_rectangle.fill = None
-                # Make text white
                 item_areas[edit_current_index].color = 0xFFFFFF
+
+    # Long press handling
+    if encoder_button.long_press:
+        if not edit_mode:
+            # Long press on home page switches between notes and guitar chords
+            chord_mode = not chord_mode
+            for key_index, key_label in enumerate(keynote_labels):
+                settings = control_settings['keys'][key_index]
+                if chord_mode:
+                    key_label.text = CHORD_ROOTS[settings['chord_root']]
+                    key_label.anchored_position = (12 + key_index * 21, 41)
+                    chordtype_labels[key_index].text = CHORD_SHAPES[settings['chord_shape']][0][:3]
+                else:
+                    key_label.text = MIDI_NOTE_NAMES[settings['note']]
+                    key_label.anchored_position = (12 + key_index * 21, 45)
+                    chordtype_labels[key_index].text = ""
+            print("Mode:", "guitar chords" if chord_mode else "single notes")
+        else:
+            # Long press in edit mode exits back to main screen
+            display.root_group = maingroup
+            edit_mode = False
+            edit_active = False
+            range_edit_active = False
+            edit_rectangle.fill = None
+            item_areas[edit_current_index].color = 0xFFFFFF
+            if current_index < 3:
+                range_min_label.color = 0xFFFFFF
+                range_max_label.color = 0xFFFFFF
+                range_label.color = 0xFFFFFF
+                range_dash_label.color = 0xFFFFFF
+                range_rectangle.hidden = True
 
     event = keys.events.get()
 
@@ -630,19 +608,14 @@ while True:
     if position != last_position:
         if not edit_mode:
             # Main menu navigation
+            old_index = current_index
             if position > last_position:
                 current_index = (current_index + 1) % len(rect_dict)
             else:
                 current_index = (current_index - 1) % len(rect_dict)
 
-            rect_info = rect_dict[current_index]
-            x, y = rect_info['pos']
-            w, h = rect_info['dim']
-
-            # Remove old rectangle and create new one with updated dimensions
-            maingroup.remove(rectangle)
-            rectangle = RoundRect(x, y, w, h, 6, fill=None, outline=0xFFFFFF)
-            maingroup.append(rectangle)
+            selector_rects[old_index].hidden = True
+            selector_rects[current_index].hidden = False
             last_position = position
 
         elif edit_mode and not edit_active:
@@ -671,26 +644,12 @@ while True:
                     pot_settings['cc_num'] = (pot_settings['cc_num'] + direction) % 128
                     item1_area.text = f"CC Number:     {pot_settings['cc_num']}"
                 elif edit_current_index == 1:  # Range editing
-                    if range_edit_active:
-                        # Actually edit the value
-                        if range_edit_selection == 0:  # Editing min
-                            pot_settings['range_min'] = (pot_settings['range_min'] +
-                                                         direction) % 128
-                            range_min_label.text = f"{pot_settings['range_min']}"
-                        else:  # Editing max
-                            pot_settings['range_max'] = (pot_settings['range_max'] +
-                                                         direction) % 128
-                            range_max_label.text = f"{pot_settings['range_max']}"
-                    else:
-                        # Special handling for range - switch between min and max
-                        if direction > 0 and range_edit_selection == 0:
-                            # Moving right from min, switch to max
-                            range_edit_selection = 1
-                            range_rectangle.x = range_max_label.x - 2
-                        elif direction < 0 and range_edit_selection == 1:
-                            # Moving left from max, switch to min
-                            range_edit_selection = 0
-                            range_rectangle.x = range_min_label.x - 2
+                    if range_edit_selection == 0:  # Editing min
+                        pot_settings['range_min'] = (pot_settings['range_min'] + direction) % 128
+                        range_min_label.text = f"{pot_settings['range_min']}"
+                    else:  # Editing max
+                        pot_settings['range_max'] = (pot_settings['range_max'] + direction) % 128
+                        range_max_label.text = f"{pot_settings['range_max']}"
                 elif edit_current_index == 2:  # MIDI Channel
                     pot_settings['channel'] = (pot_settings['channel'] + direction) % 16
                     item3_area.text = f"MIDI Channel:  {pot_settings['channel'] + 1}"
@@ -734,66 +693,66 @@ while True:
     if not POTS_CONNECTED:
         continue
 
-    pot_A_val1 = round(simpleio.map_range(val(pot_A), 65535, 0,
-                                                      control_settings['pots'][0]['range_min'],
-                                                      control_settings['pots'][0]['range_max']))
-    pot_B_val1 = round(simpleio.map_range(val(pot_B), 65535, 0,
-                                                      control_settings['pots'][1]['range_min'],
-                                                      control_settings['pots'][1]['range_max']))
-    pot_C_val1 = round(simpleio.map_range(val(pot_C), 65535, 0,
-                                                      control_settings['pots'][2]['range_min'],
-                                                      control_settings['pots'][2]['range_max']))
+    pot_A_val1 = round(simpleio.map_range(val(pot_A), 0, 65535,
+                                          control_settings['pots'][0]['range_min'],
+                                          control_settings['pots'][0]['range_max']))
+    pot_B_val1 = round(simpleio.map_range(val(pot_B), 0, 65535,
+                                          control_settings['pots'][1]['range_min'],
+                                          control_settings['pots'][1]['range_max']))
+    pot_C_val1 = round(simpleio.map_range(val(pot_C), 0, 65535,
+                                          control_settings['pots'][2]['range_min'],
+                                          control_settings['pots'][2]['range_max']))
 
     #  if modulation value is updated...
     pot_A_val1 = snap(pot_A_val1, 0)
+    p0 = control_settings['pots'][0]
     if abs(pot_A_val1 - pot_A_val2) > POT_DEADBAND or \
-            (pot_A_val1 != pot_A_val2 and pot_A_val1 in (0, 127)):
+            (pot_A_val1 != pot_A_val2 and pot_A_val1 in (p0['range_min'], p0['range_max'])):
         #  update pot_A_val2
         pot_A_val2 = pot_A_val1
         #  create integer
         modulation = int(pot_A_val2)
-        control_settings['pots'][0]['current_val'] = modulation
+        p0['current_val'] = modulation
         potvals_labels[0].text = str(modulation)
         #  create CC message
-        pot_settings = control_settings['pots'][0]
-        modWheel = ControlChange(pot_settings['cc_num'], modulation)
+        modWheel = ControlChange(p0['cc_num'], modulation)
         #  send CC message
-        midi.send(modWheel, channel=pot_settings['channel'])
+        midi.send(modWheel, channel=p0['channel'])
 
     pot_B_val1 = snap(pot_B_val1, 1)
+    p1 = control_settings['pots'][1]
     if abs(pot_B_val1 - pot_B_val2) > POT_DEADBAND or \
-            (pot_B_val1 != pot_B_val2 and pot_B_val1 in (0, 127)):
+            (pot_B_val1 != pot_B_val2 and pot_B_val1 in (p1['range_min'], p1['range_max'])):
         #  update pot_B_val2
         pot_B_val2 = pot_B_val1
         #  create integer
         ControllerB = int(pot_B_val2)
-        control_settings['pots'][1]['current_val'] = ControllerB
+        p1['current_val'] = ControllerB
         potvals_labels[1].text = str(ControllerB)
         #  create CC message
-        pot_settings = control_settings['pots'][1]
         if POT_B_PITCH_BEND:
             # 0..127 -> 0..16383; middle of the pot (62..65) = 8192 = exactly no bend
             if 62 <= ControllerB <= 65:
                 bend = 8192
             else:
                 bend = min(16383, ControllerB * 129)
-            midi.send(PitchBend(bend), channel=pot_settings['channel'])
+            midi.send(PitchBend(bend), channel=p1['channel'])
         else:
-            ControlB = ControlChange(pot_settings['cc_num'], ControllerB)
+            ControlB = ControlChange(p1['cc_num'], ControllerB)
             #  send CC message
-            midi.send(ControlB, channel=pot_settings['channel'])
+            midi.send(ControlB, channel=p1['channel'])
 
     pot_C_val1 = snap(pot_C_val1, 2)
+    p2 = control_settings['pots'][2]
     if abs(pot_C_val1 - pot_C_val2) > POT_DEADBAND or \
-            (pot_C_val1 != pot_C_val2 and pot_C_val1 in (0, 127)):
+            (pot_C_val1 != pot_C_val2 and pot_C_val1 in (p2['range_min'], p2['range_max'])):
         #  update pot_c_val2
         pot_C_val2 = pot_C_val1
         #  create integer
         ControllerC = int(pot_C_val2)
-        control_settings['pots'][2]['current_val'] = ControllerC
+        p2['current_val'] = ControllerC
         potvals_labels[2].text = str(ControllerC)
         #  create CC message
-        pot_settings = control_settings['pots'][2]
         if POT_C_INSTRUMENTS:
             # split the pot into one zone per instrument; only switch once the pot is
             # 2 steps inside the new zone, so noise at a zone border can't flip back and forth
@@ -809,12 +768,15 @@ while True:
                 if program is None:
                     midi.out_channel = DRUM_CHANNEL
                 else:
-                    midi.out_channel = pot_settings['channel']
+                    midi.out_channel = p2['channel']
                     midi.send(ProgramChange(program))
                 current_instrument = index
                 print("Instrument:", name)
-            potvals_labels[2].text = INSTRUMENTS[current_instrument][0]
+            if current_instrument >= 0:
+                potvals_labels[2].text = INSTRUMENTS[current_instrument][0]
         else:
-            ControlC = ControlChange(pot_settings['cc_num'], ControllerC)
+            ControlC = ControlChange(p2['cc_num'], ControllerC)
             #  send CC message
-            midi.send(ControlC, channel=pot_settings['channel'])
+            midi.send(ControlC, channel=p2['channel'])
+
+    time.sleep(0.002)
