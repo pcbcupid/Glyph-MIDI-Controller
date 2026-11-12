@@ -554,8 +554,7 @@ while True:
         # event.key_number gives you the index (0-5) of which button
         key_index = event.key_number
 
-        in_chord_mode = globals().get('chord_mode', False)
-        drums = (not in_chord_mode and POT_C_INSTRUMENTS and current_instrument >= 0
+        drums = (not chord_mode and POT_C_INSTRUMENTS and current_instrument >= 0
                  and INSTRUMENTS[current_instrument][1] is None)
         key_settings = control_settings['keys'][key_index]
         key_note = DRUM_NOTES[key_index] if drums else key_settings['note']
@@ -563,49 +562,39 @@ while True:
 
         if event.pressed:
             pitches = (guitar_chord(key_settings['chord_root'], key_settings['chord_shape'])
-                       if in_chord_mode else (key_note,))
+                       if chord_mode else (key_note,))
             held_keys[key_index] = (pitches, key_channel)
-            notes_dict = globals().get('active_notes', None)
             for pitch in pitches:
                 note_id = (key_channel, pitch)
-                if notes_dict is not None:
-                    if not notes_dict.get(note_id, 0):
-                        midi.send(NoteOn(pitch, key_settings['velocity']), channel=key_channel)
-                    notes_dict[note_id] = notes_dict.get(note_id, 0) + 1
-                else:
+                if not active_notes.get(note_id, 0):
                     midi.send(NoteOn(pitch, key_settings['velocity']), channel=key_channel)
+                active_notes[note_id] = active_notes.get(note_id, 0) + 1
             key_panels[key_index].fill = 0xFFFFFF
             keynote_labels[key_index].color = 0x000000
-            if "chordtype_labels" in globals():
-                chordtype_labels[key_index].color = 0x000000
+            chordtype_labels[key_index].color = 0x000000
             key_rings[key_index].hidden = False
             key_ring_until[key_index] = time.monotonic() + 0.12
             print("Key", key_index + 1, "pressed ->",
                   chord_name(key_settings['chord_root'], key_settings['chord_shape'])
-                  if in_chord_mode else MIDI_NOTE_NAMES[key_note])
+                  if chord_mode else MIDI_NOTE_NAMES[key_note])
 
         if event.released:
             # Release exactly the pitches and channel used at press time, even
             # if the mode or assignment changed while the key was held.
             if held_keys[key_index] is not None:
                 pitches, off_channel = held_keys[key_index]
-                notes_dict = globals().get('active_notes', None)
                 for pitch in pitches:
                     note_id = (off_channel, pitch)
-                    if notes_dict is not None:
-                        count = notes_dict.get(note_id, 0)
-                        if count <= 1:
-                            notes_dict.pop(note_id, None)
-                            midi.send(NoteOff(pitch, key_settings['velocity']), channel=off_channel)
-                        else:
-                            notes_dict[note_id] = count - 1
-                    else:
+                    count = active_notes.get(note_id, 0)
+                    if count <= 1:
+                        active_notes.pop(note_id, None)
                         midi.send(NoteOff(pitch, key_settings['velocity']), channel=off_channel)
+                    else:
+                        active_notes[note_id] = count - 1
             held_keys[key_index] = None
             key_panels[key_index].fill = None
             keynote_labels[key_index].color = 0xFFFFFF
-            if "chordtype_labels" in globals():
-                chordtype_labels[key_index].color = 0xFFFFFF
+            chordtype_labels[key_index].color = 0xFFFFFF
 
     now = time.monotonic()
     for key_index, until in enumerate(key_ring_until):

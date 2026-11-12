@@ -81,6 +81,7 @@ For serial errors, the board appears as `/dev/ttyACM*` on Linux or `/dev/cu.usbm
 | Action | Result |
 | --- | --- |
 | Press a switch | Send Note On; release sends Note Off. Several keys can make a chord. |
+| Long press encoder on the home screen | Switch between single-note mode and guitar chord mode. The six key boxes show a root and shape on two lines in chord mode. |
 | Turn Pot A | Modulation, MIDI CC 1. |
 | Turn Pot B | Pitch bend. Centre is normal pitch. |
 | Turn Pot C | Expression, MIDI CC 11. |
@@ -89,7 +90,28 @@ For serial errors, the board appears as `/dev/ttyACM*` on Linux or `/dev/cu.usbm
 | In the edit page | Turn to choose a line; long press to edit; turn to change; long press to finish. |
 | Double press encoder | Send All Notes Off on all 16 MIDI channels. |
 
-The OLED shows live knob values and the six assigned notes. A pressed key fills its box while held, with a brief outline pop. The startup music-note animation lasts about 1.7 seconds. Menu edits last until the next restart; they are **not saved** to flash. To make a change permanent, edit the defaults in `code.py`.
+The OLED shows live knob values and the six assigned notes or chords. A pressed key fills its box while held, with a brief outline pop. The startup music-note animation lasts about 1.7 seconds. The device starts in chord mode with the custom preset below after each restart. Long press the encoder on the home screen to switch to single-note mode. Menu edits and the selected mode last until the next restart; they are **not saved** to flash. To make a change permanent, edit the defaults in `code.py`.
+
+### Guitar chord mode
+
+Long press the encoder while on the home screen. Each key then sends the MIDI pitches of a guitar fingering together; releasing it stops those pitches. Repeated notes on different strings are included, and muted strings send nothing. Multiple keys can be held together. If two held chords share a pitch, releasing one key keeps that pitch sounding until the other key is released. The same behavior works with a laptop MIDI instrument that accepts polyphonic MIDI notes; choose a guitar patch in that app if you want a guitar sound.
+
+The initial chord assignments are a **no-capo custom** preset using the four chords requested:
+
+| Key | Chord | Use |
+| --- | --- | --- |
+| 1 | C#m | Progression |
+| 2 | B | Progression |
+| 3 | A | Progression |
+| 4 | B | Progression |
+| 5 | C#m | Duplicate of key 1 |
+| 6 | B | Duplicate of key 2 |
+
+Play **1 → 2 → 3 → 4** for C#m → B → A → B. These are the sounding chords, with no capo or transpose setting needed in VMPK. Keys 5 and 6 repeat the first two chords so all six keys remain playable. The key assignments can be edited on the OLED.
+
+Other root/shape combinations use movable six-string fingerings based on an E-root shape. All 12 roots are available. The shape menu includes major, minor, power, sus2, sus4, augmented, diminished, 6, m6, 7, maj7, m7, mMaj7, dim7, m7b5, 7sus4, add9, madd9, 9, maj9, m9, 13, 7b9, 7#9, 7b5, 7#5, and 6/9. Some shapes mute one or more strings, as on a guitar.
+
+To change a key's chord, turn the encoder on the home screen to select the key, then short press to open its edit page. Turn to select **Root**, **Shape**, **Velocity**, or **Channel**. Long press to edit the selected value, turn to change it, then long press to finish. Short press to return home. The root and shape are separate from that key's single-note assignment; velocity and MIDI channel are shared. Editing a held key will affect its next press, while its current sound releases correctly. A short shape label on the home screen may be abbreviated; the edit page shows the full shape name.
 
 Default notes are MIDI numbers **61, 64, 66, 68, 73, 75** for keys 1-6. Those are commonly named C#4, E4, F#4, G#4, C#5, D#5. The OLED uses a naming table starting at C-2, so its printed octave number is one lower; the MIDI note number is unchanged. Default velocity is 120 and default channel is MIDI channel 1.
 
@@ -102,7 +124,7 @@ Default notes are MIDI numbers **61, 64, 66, 68, 73, 75** for keys 1-6. Those ar
 | `POT_B_PITCH_BEND` | `True` | Set `False` to make Pot B send its configured CC instead. |
 | `POT_C_INSTRUMENTS` | `False` | Set `True` to select General MIDI instruments; the last zone selects drums on channel 10. |
 | `POT_DEADBAND` | `2` | A knob must move more than this many steps before sending again. |
-| `control_settings` | See code | Default notes, velocities, channels, pot CC numbers, and ranges. Channels are shown as 1-16 on the OLED and stored as 0-15 in code. |
+| `control_settings` | See code | Default notes, chord roots and shapes, velocities, channels, pot CC numbers, and ranges. Chord roots use 0-11 for C through B; chord shapes use indexes into `CHORD_SHAPES`. Channels are shown as 1-16 on the OLED and stored as 0-15 in code. |
 
 The code averages eight ADC readings and ignores small changes to reduce knob jitter. Pot A/B/C are on GP26/GP27/GP28. `OLED_CONTRAST` applies to the SH1106 path; SSD1306 uses its driver default.
 
