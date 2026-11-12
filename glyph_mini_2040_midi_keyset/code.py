@@ -458,6 +458,7 @@ edit_current_index = 0
 edit_active = False  # Whether we're actively editing a value
 range_edit_selection = 0  # 0 for min, 1 for max
 range_edit_active = False  # New variable to track if we're actively editing a range value
+long_press_handled = False  # edge detect so one hold = one long-press action
 
 while True:
     # Update encoder button state
@@ -517,8 +518,10 @@ while True:
                 edit_rectangle.fill = None
                 item_areas[edit_current_index].color = 0xFFFFFF
 
-    # Long press handling
-    if encoder_button.long_press:
+    # Long press handling (fire once per hold, whatever long_press semantics are)
+    long_fire = encoder_button.long_press and not long_press_handled
+    long_press_handled = encoder_button.long_press
+    if long_fire:
         if not edit_mode:
             # Long press on home page switches between notes and guitar chords
             chord_mode = not chord_mode
